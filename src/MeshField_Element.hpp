@@ -130,13 +130,24 @@ struct FieldElement {
   const FieldAccessor field;
   ShapeType shapeFn;
   ElementDofHolderAccessor elm2dof;
+  Kokkos::View<Real**> elemCoeffs;  // Optional: per-element coefficients for advanced shapes
 
   static const size_t MeshEntDim = ShapeType::meshEntDim;
+  
+  // Standard constructor (for shapes without per-element coefficients)
   FieldElement(size_t numMeshEntsIn, const FieldAccessor &fieldIn,
                const ShapeType shapeFnIn,
                const ElementDofHolderAccessor elm2dofIn)
       : numMeshEnts(numMeshEntsIn), field(fieldIn), shapeFn(shapeFnIn),
-        elm2dof(elm2dofIn) {}
+        elm2dof(elm2dofIn), elemCoeffs() {}
+  
+  // Constructor with per-element coefficients (for reduced quintic, etc.)
+  FieldElement(size_t numMeshEntsIn, const FieldAccessor &fieldIn,
+               const ShapeType shapeFnIn,
+               const ElementDofHolderAccessor elm2dofIn,
+               Kokkos::View<Real**> elemCoeffsIn)
+      : numMeshEnts(numMeshEntsIn), field(fieldIn), shapeFn(shapeFnIn),
+        elm2dof(elm2dofIn), elemCoeffs(elemCoeffsIn) {}
   /* general template for baseType which simply sets type
    */
   template <typename T> struct baseType {
@@ -173,7 +184,21 @@ struct FieldElement {
     assert(ent >= 0);
     assert(static_cast<size_t>(ent) < numMeshEnts);
     ValArray c;
-    const auto shapeValues = shapeFn.getValues(localCoord);
+    
+    // Get shape function values
+    // For shapes that require per-element coefficients (e.g., reduced quintic), pass the coefficients to the shape function
+    decltype(shapeFn.getValues(localCoord)) shapeValues;
+    if constexpr (std::is_same_v<decltype(shapeFn), ReducedQuinticTriangleShape>) {
+        assert(elemCoeffs.data() != nullptr &&
+               "Element coefficients required but not provided");
+        shapeValues = shapeFn.getValues(localCoord, &elemCoeffs(ent, 0));
+        const int order[3] = {static_cast<int>(elemCoeffs[0]), 
+                          static_cast<int>(elemCoeffs[1]), 
+                          static_cast<int>(elemCoeffs[2])};
+    } else {
+        shapeValues = shapeFn.getValues(localCoord);
+    }
+    
     for (size_t ci = 0; ci < NumComponents; ++ci)
       c[ci] = 0;
     for (auto topo : elm2dof.getTopology()) { // element topology
