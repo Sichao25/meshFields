@@ -187,17 +187,15 @@ struct FieldElement {
     
     // Get shape function values
     // For shapes that require per-element coefficients (e.g., reduced quintic), pass the coefficients to the shape function
-    decltype(shapeFn.getValues(localCoord)) shapeValues;
-    if constexpr (std::is_same_v<decltype(shapeFn), ReducedQuinticTriangleShape>) {
-        assert(elemCoeffs.data() != nullptr &&
-               "Element coefficients required but not provided");
-        shapeValues = shapeFn.getValues(localCoord, &elemCoeffs(ent, 0));
-        const int order[3] = {static_cast<int>(elemCoeffs[0]), 
-                          static_cast<int>(elemCoeffs[1]), 
-                          static_cast<int>(elemCoeffs[2])};
-    } else {
-        shapeValues = shapeFn.getValues(localCoord);
-    }
+    auto shapeValues = [&]() {
+      if constexpr (std::is_same_v<std::decay_t<decltype(shapeFn)>,
+                                ReducedQuinticTriangleShape>) {
+        assert(elemCoeffs.data() != nullptr);
+        return shapeFn.getValues(localCoord, &elemCoeffs(ent, 0));
+      } else {
+        return shapeFn.getValues(localCoord);
+      }
+    }();
     
     for (size_t ci = 0; ci < NumComponents; ++ci)
       c[ci] = 0;
