@@ -391,8 +391,23 @@ bool testFieldEvaluation(const char* testName, Real coords[3][2], Real dofs[18],
     
     // Evaluate on host
     ReducedQuinticTriangleShape shape;
-    auto shapeValues = shape.getValues(bary, &elemCoeffs_h(0, 0));
-    auto shapeGrads = shape.getLocalGradients(bary, &elemCoeffs_h(0, 0));
+
+    Kokkos::View<Real*>  shapeValues_d("shapeValues", 18);   // 1D
+    Kokkos::View<Real**> shapeGrads_d("shapeGrads", 18, 2);  // 2D
+
+    Kokkos::parallel_for("EvaluateField", 1, KOKKOS_LAMBDA(int) {
+      auto coeffSlice = Kokkos::subview(elemCoeffs, 0, Kokkos::ALL());
+      auto shapeValues_array = shape.getValues(bary, coeffSlice);
+      auto shapeGrads_array = shape.getLocalGradients(bary, coeffSlice);
+      for (int i = 0; i < 18; i++) {
+        shapeValues_d(i) = shapeValues_array[i];
+        shapeGrads_d(i, 0) = shapeGrads_array[i][0];
+        shapeGrads_d(i, 1) = shapeGrads_array[i][1];
+      }
+    });
+
+    auto shapeValues = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), shapeValues_d);
+    auto shapeGrads = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), shapeGrads_d);
     
     // Interpolate field value and gradients
     Real f_val = 0.0;
@@ -401,9 +416,9 @@ bool testFieldEvaluation(const char* testName, Real coords[3][2], Real dofs[18],
     
     for (int ni = 0; ni < 18; ni++) {
       Real dofValue = dofs[ni];
-      f_val += shapeValues[ni] * dofValue;
-      dfdxi0 += shapeGrads[ni][0] * dofValue;
-      dfdxi1 += shapeGrads[ni][1] * dofValue;
+      f_val += shapeValues(ni) * dofValue;
+      dfdxi0 += shapeGrads(ni, 0) * dofValue;
+      dfdxi1 += shapeGrads(ni, 1) * dofValue;
     }
     
     // Transform gradients to physical coordinates
@@ -576,6 +591,54 @@ int main(int argc, char** argv) {
       };
       allPassed &= testFieldEvaluation("Quadratic field f=x²+y²", 
                                        coords, dofs, evalPoints, 2, lib);
+    }
+
+    std::cout << "Test 9: Mixed derivative field (f=x*y)\n";
+    std::cout << "=====================================\n";
+    {
+      Real coords[3][2] = {{1, 1}, {5, 1}, {2, 4}};
+      Real dofs[18];
+
+      for (int i = 0; i < 3; i++) {
+        Real x = coords[i][0];
+        Real y = coords[i][1];
+
+        dofs[i*6 + 0] = x * y;   // f
+        dofs[i*6 + 1] = y;       // df/dx
+        dofs[i*6 + 2] = x;       // df/dy
+        dofs[i*6 + 3] = 0.0;     // d²f/dx²
+        dofs[i*6 + 4] = 1.0;     // d²f/dxdy
+        dofs[i*6 + 5] = 0.0;     // d²f/dy²
+      }
+
+      EvalPoint evalPoints[] = {
+        {
+          {8.0/3.0, 2.0},
+          (8.0/3.0) * 2.0,   // f
+          2.0,               // df/dx = y
+          8.0/3.0            // df/dy = x
+        },
+        {
+          {3.0, 1.0},
+          3.0,               // f
+          1.0,               // df/dx
+          3.0                // df/dy
+        },
+        {
+          {2.5, 2.0},
+          5.0,               // f
+          2.0,               // df/dx
+          2.5                // df/dy
+        }
+      };
+
+      allPassed &= testFieldEvaluation(
+          "Mixed derivative field f=x*y",
+          coords,
+          dofs,
+          evalPoints,
+          3,
+          lib);
     }
     
     std::cout << "\n====================================\n";

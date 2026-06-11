@@ -323,19 +323,18 @@ struct ReducedQuinticTriangleShape {
 
   KOKKOS_INLINE_FUNCTION
   Kokkos::Array<Real, numNodes> getValues(Vector3 const &xi,
-                                          const Real* elemCoeffs) const {
+                                          Kokkos::View<const Real*, Kokkos::LayoutStride> elemCoeffs) const {
     assert(greaterThanOrEqualZero(xi));
     assert(sumsToOne(xi));
-    
+
     // Extract geometric parameters from coefficient array
     // elemCoeffs layout: [order[0], order[1], order[2], a, b, c, coeff_0_0, coeff_0_1, ..., coeff_17_19]
-    const int order[3] = {static_cast<int>(elemCoeffs[0]), 
-                          static_cast<int>(elemCoeffs[1]), 
-                          static_cast<int>(elemCoeffs[2])};
-    const Real a = elemCoeffs[3];
-    const Real b = elemCoeffs[4];
-    const Real c = elemCoeffs[5];
-    const Real* coeffs = elemCoeffs + 6;  // Skip order and geometric parameters
+    const int order[3] = {static_cast<int>(elemCoeffs(0)), 
+                          static_cast<int>(elemCoeffs(1)), 
+                          static_cast<int>(elemCoeffs(2))};
+    const Real a = elemCoeffs(3);
+    const Real b = elemCoeffs(4);
+    const Real c = elemCoeffs(5);
     
     // Transform barycentric to local coordinates
     const auto local = ReducedQuinticHelpers::barycentricToLocal(xi, order, a, b, c);
@@ -362,7 +361,7 @@ struct ReducedQuinticTriangleShape {
         const int eta_idx  = poly[1];
 
         N_reordered[k] +=
-            coeffs[k * 20 + i] *
+            elemCoeffs(6 + k * 20 + i) *
             xi_pow[xi_idx] *
             eta_pow[eta_idx];
       }
@@ -385,18 +384,17 @@ struct ReducedQuinticTriangleShape {
 
   KOKKOS_INLINE_FUNCTION
   Kokkos::Array<Vector2, numNodes> getLocalGradients(Vector3 const &xi,
-                                                      const Real* elemCoeffs) const {
+                                                      Kokkos::View<const Real*, Kokkos::LayoutStride> elemCoeffs) const {
     assert(greaterThanOrEqualZero(xi));
     assert(sumsToOne(xi));
     
     // Extract geometric parameters
-    const int order[3] = {static_cast<int>(elemCoeffs[0]), 
-                          static_cast<int>(elemCoeffs[1]), 
-                          static_cast<int>(elemCoeffs[2])};
-    const Real a = elemCoeffs[3];
-    const Real b = elemCoeffs[4];
-    const Real c = elemCoeffs[5];
-    const Real* coeffs = elemCoeffs + 6;
+    const int order[3] = {static_cast<int>(elemCoeffs(0)), 
+                          static_cast<int>(elemCoeffs(1)), 
+                          static_cast<int>(elemCoeffs(2))};
+    const Real a = elemCoeffs(3);
+    const Real b = elemCoeffs(4);
+    const Real c = elemCoeffs(5);
     
     // Transform barycentric to local coordinates
     const auto local = ReducedQuinticHelpers::barycentricToLocal(xi, order, a, b, c);
@@ -445,7 +443,7 @@ struct ReducedQuinticTriangleShape {
         const auto poly = ReducedQuinticHelpers::getReducedQuinticPolyIdx(i);
         const int xi_idx  = poly[0];
         const int eta_idx = poly[1];
-        const Real coeff  = coeffs[k * 20 + i];
+        const Real coeff  = elemCoeffs(6 + k * 20 + i);
 
         if (xi_idx > 0)
           dN_dxi_local +=
