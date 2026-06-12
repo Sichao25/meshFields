@@ -201,6 +201,7 @@ meshfields_add_exe(OmegahTetTest test/testOmegahTet.cpp)
 meshfields_add_exe(OmegahThwaitesSprAdapt test/testSprThwaitesAdapt.cpp)
 meshfields_add_exe(ReducedQuinticTest test/testReducedQuintic.cpp)
 meshfields_add_exe(OmegahReducedQuinticTest test/testOmegahReducedQuintic.cpp)
+meshfields_add_exe(ReducedQuinticAPITest test/testReducedQuinticAPI.cpp)
 
 if(MeshFields_USE_Cabana)
   meshfields_add_exe(ControllerPerformance test/testControllerPerformance.cpp)
