@@ -349,6 +349,11 @@ struct EvalPoint {
 bool testFieldEvaluation(const char* testName, Real coords[3][2], Real dofs[18],
                          EvalPoint* evalPoints, int numPoints, Omega_h::Library& lib) {
   std::cout << "Test: " << testName << "\n";
+  std::cout << "  numPoints=" << numPoints << "\n";
+  std::cout << "  Triangle vertices: "
+            << "(" << coords[0][0] << "," << coords[0][1] << ") "
+            << "(" << coords[1][0] << "," << coords[1][1] << ") "
+            << "(" << coords[2][0] << "," << coords[2][1] << ")\n";
   
   // Precompute coefficients
   std::vector<Real> triCoords(6);
@@ -361,6 +366,9 @@ bool testFieldEvaluation(const char* testName, Real coords[3][2], Real dofs[18],
   Real origin[2], a, b, c, sin_theta, cos_theta;
   int order[3];
   computeReducedQuinticGeometry(coords, origin, a, b, c, sin_theta, cos_theta, order);
+  std::cout << "  Geometric params: a=" << a << " b=" << b << " c=" << c
+            << " sin_theta=" << sin_theta << " cos_theta=" << cos_theta
+            << " order=[" << order[0] << "," << order[1] << "," << order[2] << "]\n";
   
   // Rotate DOFs to local coordinate system
   for(int i=0; i<3; i++) {
@@ -456,6 +464,7 @@ bool testFieldEvaluation(const char* testName, Real coords[3][2], Real dofs[18],
     std::cout << "  ✓ PASSED\n\n";
   } else {
     std::cout << "  ❌ FAILED\n\n";
+    fail("testFieldEvaluation: \"%s\" FAILED", testName);
   }
   
   return passed;
