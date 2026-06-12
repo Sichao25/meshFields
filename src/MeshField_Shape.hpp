@@ -328,7 +328,7 @@ struct ReducedQuinticTriangleShape {
     assert(sumsToOne(xi));
 
     // Extract geometric parameters from coefficient array
-    // elemCoeffs layout: [order[0], order[1], order[2], a, b, c, coeff_0_0, coeff_0_1, ..., coeff_17_19]
+    // elemCoeffs layout: [order[0], order[1], order[2], a, b, c, sin_theta, cos_theta, coeff_0_0, ..., coeff_17_19]
     const int order[3] = {static_cast<int>(elemCoeffs(0)), 
                           static_cast<int>(elemCoeffs(1)), 
                           static_cast<int>(elemCoeffs(2))};
@@ -361,7 +361,7 @@ struct ReducedQuinticTriangleShape {
         const int eta_idx  = poly[1];
 
         N_reordered[k] +=
-            elemCoeffs(6 + k * 20 + i) *
+            elemCoeffs(8 + k * 20 + i) *
             xi_pow[xi_idx] *
             eta_pow[eta_idx];
       }
@@ -443,7 +443,7 @@ struct ReducedQuinticTriangleShape {
         const auto poly = ReducedQuinticHelpers::getReducedQuinticPolyIdx(i);
         const int xi_idx  = poly[0];
         const int eta_idx = poly[1];
-        const Real coeff  = elemCoeffs(6 + k * 20 + i);
+        const Real coeff  = elemCoeffs(8 + k * 20 + i);
 
         if (xi_idx > 0)
           dN_dxi_local +=

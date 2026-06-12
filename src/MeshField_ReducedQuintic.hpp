@@ -131,6 +131,54 @@ void rotateDof(double dofs_p[6], double sin_theta_p, double cos_theta_p)
 }
 
 /**
+ * @brief Device-compatible function to transform DOFs from physical to local coordinates
+ * 
+ * Transforms derivatives from physical (x,y) coordinates to local (ξ,η) coordinates
+ * using a rotation. This is necessary because ReducedQuintic shape functions are
+ * defined in a local coordinate system aligned with the triangle's geometry.
+ * 
+ * @param dof_value The DOF value to transform (one of the 6 components per vertex)
+ * @param vertex_idx Vertex index (0, 1, or 2)
+ * @param dof_idx DOF component index (0-5: value, ∂x, ∂y, ∂²x², ∂²xy, ∂²y²)
+ * @param sin_theta Sine of rotation angle (from elemCoeffs)
+ * @param cos_theta Cosine of rotation angle (from elemCoeffs)
+ * @param allDofs Array of all 6 DOFs for this vertex in physical coordinates
+ * @return The transformed DOF value in local coordinates
+ */
+template<typename Real>
+KOKKOS_INLINE_FUNCTION
+Real transformDofPhysicalToLocal(
+    int dof_idx,
+    Real sin_theta,
+    Real cos_theta,
+    const Real allDofs[6])
+{
+  const Real s  = sin_theta;
+  const Real c  = cos_theta;
+  const Real ss = s * s;
+  const Real cc = c * c;
+  const Real sc = s * c;
+
+  // Transform based on DOF type
+  switch (dof_idx) {
+    case 0: // value - unchanged
+      return allDofs[0];
+    case 1: // ∂/∂x → ∂/∂ξ
+      return c * allDofs[1] + s * allDofs[2];
+    case 2: // ∂/∂y → ∂/∂η
+      return c * allDofs[2] - s * allDofs[1];
+    case 3: // ∂²/∂x²
+      return cc * allDofs[3] + 2*sc * allDofs[4] + ss * allDofs[5];
+    case 4: // ∂²/∂x∂y
+      return -sc * allDofs[3] + (cc - ss) * allDofs[4] + sc * allDofs[5];
+    case 5: // ∂²/∂y²
+      return ss * allDofs[3] - 2*sc * allDofs[4] + cc * allDofs[5];
+    default:
+      return allDofs[dof_idx];
+  }
+}
+
+/**
  * @brief Reorder triangle vertices to put longest edge along local xi-axis
  * 
  * Reordering strategy:
@@ -346,8 +394,9 @@ inline Kokkos::View<Real**> precomputeReducedQuinticCoefficients(
     int numTriangles,
     const Real* triangleCoords)
 {
-  // Allocate device view first with proper layout
-  Kokkos::View<Real**> coeffs_d("coefficients_device", numTriangles, 6 + 18 * 20);
+  // Allocate device view with extended storage for sin_theta and cos_theta
+  // Layout: [order[0], order[1], order[2], a, b, c, sin_theta, cos_theta, coeff_0_0, ..., coeff_17_19]
+  Kokkos::View<Real**> coeffs_d("coefficients_device", numTriangles, 8 + 18 * 20);
   
   // Create a mirror view on host with matching layout
   auto coeffs_h = Kokkos::create_mirror_view(coeffs_d);
@@ -365,22 +414,24 @@ inline Kokkos::View<Real**> precomputeReducedQuinticCoefficients(
     int order[3];
     computeReducedQuinticGeometry(coords, origin, a, b, c, sin_theta, cos_theta, order);
     
-    // Store vertex order and geometric parameters
+    // Store vertex order, geometric parameters, and rotation angles
     coeffs_h(tri, 0) = static_cast<Real>(order[0]);
     coeffs_h(tri, 1) = static_cast<Real>(order[1]);
     coeffs_h(tri, 2) = static_cast<Real>(order[2]);
     coeffs_h(tri, 3) = a;
     coeffs_h(tri, 4) = b;
     coeffs_h(tri, 5) = c;
+    coeffs_h(tri, 6) = sin_theta;
+    coeffs_h(tri, 7) = cos_theta;
     
     // Compute coefficients
     Real coeffs_tri[18][20];
     computeReducedQuinticCoefficients(a, b, c, coeffs_tri);
     
-    // Store in flattened format after order and geometric parameters
+    // Store in flattened format after order, geometric parameters, and rotation angles
     for (int i = 0; i < 18; i++) {
       for (int j = 0; j < 20; j++) {
-        coeffs_h(tri, 6 + i * 20 + j) = coeffs_tri[i][j];
+        coeffs_h(tri, 8 + i * 20 + j) = coeffs_tri[i][j];
       }
     }
   }
